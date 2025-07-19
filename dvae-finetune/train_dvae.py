@@ -277,8 +277,8 @@ if __name__== "__main__":
         "learning_rate": 5e-05,
         "num_workers": 8,
         "grad_clip_norm": 0.5,
-        "use_mixed_precision": "store_true",
-        "use_wandb": "store_true",
+        "use_mixed_precision": False,
+        "use_wandb": True,
         "save_every": 10,
     }
 
