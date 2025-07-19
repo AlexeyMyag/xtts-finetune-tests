@@ -78,6 +78,24 @@ def train_dvae(args):
         use_transposed_convs=False,
     )
     dvae.load_state_dict(torch.load(args["dvae_checkpoint"]), strict=False)
+    # Патчим loss_fn, чтобы при несовпадении длины усекать до минимальной
+    orig_loss_fn = dvae.loss_fn
+
+    def fixed_loss_fn(a, b, reduction="none"):
+        # a = img, b = out
+        if a.shape[-1] != b.shape[-1]:
+            min_len = min(a.shape[-1], b.shape[-1])
+            a = a[..., :min_len]
+            b = b[..., :min_len]
+
+            print("SHIIIT")
+
+        else:
+            print("ALL IS NOTM")
+
+        return orig_loss_fn(a, b, reduction=reduction)
+
+    dvae.loss_fn = fixed_loss_fn
     dvae.cuda()
 
     # Use mixed precision if enabled
@@ -156,7 +174,7 @@ def train_dvae(args):
         for cur_step, batch in enumerate(progress_bar):
             opt.zero_grad()
 
-            with torch.cuda.amp.autocast(enabled=args["use_mixed_precision"]):
+            with torch.cuda.amp.autocast('cuda', enabled=args["use_mixed_precision"]):
                 recon_loss, commitment_loss, out = dvae(batch['mel'].cuda())
 
                 recon_loss = recon_loss.mean()
