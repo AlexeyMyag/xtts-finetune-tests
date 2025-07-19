@@ -270,7 +270,7 @@ if __name__== "__main__":
     args = {
         "dvae_checkpoint": "/home/xtts_v2_training/src/run/training/XTTS_v2.0_original_model_files/dvae.pth",
         "mel_norm_file": "/home/xtts_v2_training/src/run/training/XTTS_v2.0_original_model_files/mel_stats.pth",
-        "dataset_path": 'metadata_joined.txt',
+        "dataset_path": '',
         "language": "ru",
         "epochs": 20,
         "batch_size": 10,
