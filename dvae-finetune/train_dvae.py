@@ -174,7 +174,7 @@ def train_dvae(args):
         for cur_step, batch in enumerate(progress_bar):
             opt.zero_grad()
 
-            with torch.cuda.amp.autocast('cuda', enabled=args["use_mixed_precision"]):
+            with torch.cuda.amp.autocast(enabled=args["use_mixed_precision"]):
                 recon_loss, commitment_loss, out = dvae(batch['mel'].cuda())
 
                 recon_loss = recon_loss.mean()
