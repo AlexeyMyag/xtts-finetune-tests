@@ -77,24 +77,24 @@ def train_dvae(args):
         num_layers=2,
         use_transposed_convs=False,
     )
-    dvae.load_state_dict(torch.load(args.dvae_checkpoint), strict=False)
+    dvae.load_state_dict(torch.load(args["dvae_checkpoint"]), strict=False)
     dvae.cuda()
 
     # Use mixed precision if enabled
-    scaler = torch.cuda.amp.GradScaler(enabled=args.use_mixed_precision)
+    scaler = torch.cuda.amp.GradScaler(enabled=args["use_mixed_precision"])
 
     # Step 2: Set up optimizer and mel spectrogram converter
-    opt = bnb.optim.Adam8bit(dvae.parameters(), lr=args.learning_rate)
+    opt = bnb.optim.Adam8bit(dvae.parameters(), lr=args["learning_rate"])
     torch_mel_spectrogram = TorchMelSpectrogram(
-        mel_norm_file=args.mel_norm_file, sampling_rate=22050
+        mel_norm_file=args["mel_norm_file"], sampling_rate=22050
     ).cuda()
 
     # Step 3: Load dataset
-    train_samples, eval_samples = load_custom_dataset(args.dataset_path, args.language)
+    train_samples, eval_samples = load_custom_dataset(args["dataset_path"], args["language"])
 
     # Step 4: Precompute mel-spectrograms
-    train_mels_dir = os.path.join(args.dataset_path, "mels", "train")
-    eval_mels_dir = os.path.join(args.dataset_path, "mels", "eval")
+    train_mels_dir = os.path.join(args["dataset_path"], "mels", "train")
+    eval_mels_dir = os.path.join(args["dataset_path"], "mels", "eval")
     precompute_mel_spectrograms(train_samples, train_mels_dir, torch_mel_spectrogram)
     precompute_mel_spectrograms(eval_samples, eval_mels_dir, torch_mel_spectrogram)
 
@@ -103,22 +103,22 @@ def train_dvae(args):
 
     eval_data_loader = DataLoader(
         eval_dataset,
-        batch_size=args.batch_size,
+        batch_size=args["batch_size"],
         shuffle=False,
         drop_last=False,
         collate_fn=eval_dataset.collate_fn,
-        num_workers=args.num_workers // 2,
+        num_workers=args["num_workers"] // 2,
         pin_memory=True,
         persistent_workers=True
     )
 
     train_data_loader = DataLoader(
         train_dataset,
-        batch_size=args.batch_size,
+        batch_size=args["batch_size"],
         shuffle=True,
         drop_last=False,
         collate_fn=train_dataset.collate_fn,
-        num_workers=args.num_workers,
+        num_workers=args["num_workers"],
         pin_memory=True,
         persistent_workers=True
     )
@@ -127,7 +127,7 @@ def train_dvae(args):
     torch.set_grad_enabled(True)
     dvae.train()
 
-    if args.use_wandb:
+    if args["use_wandb"]:
         import wandb
         wandb.init(project='train_dvae')
         wandb.watch(dvae)
@@ -139,7 +139,7 @@ def train_dvae(args):
         'commit_loss': float('inf'),
         'epoch': -1
     }
-    total_steps = len(train_data_loader) * args.epochs
+    total_steps = len(train_data_loader) * args["epochs"]
 
     # Create a table to display metrics
     metrics_table = PrettyTable()
@@ -147,16 +147,16 @@ def train_dvae(args):
 
     global_step = 0
 
-    for epoch in range(args.epochs):
+    for epoch in range(args["epochs"]):
         epoch_loss = 0
         epoch_recon_loss = 0
         epoch_commit_loss = 0
 
-        progress_bar = tqdm(train_data_loader, desc=f"Epoch {epoch+1}/{args.epochs}")
+        progress_bar = tqdm(train_data_loader, desc=f"Epoch {epoch+1}/{args["epochs"]}")
         for cur_step, batch in enumerate(progress_bar):
             opt.zero_grad()
 
-            with torch.cuda.amp.autocast(enabled=args.use_mixed_precision):
+            with torch.cuda.amp.autocast(enabled=args["use_mixed_precision"]):
                 recon_loss, commitment_loss, out = dvae(batch['mel'].cuda())
 
                 recon_loss = recon_loss.mean()
@@ -164,7 +164,7 @@ def train_dvae(args):
                 total_loss = recon_loss + commitment_loss
 
             scaler.scale(total_loss).backward()
-            clip_grad_norm_(dvae.parameters(), args.grad_clip_norm)
+            clip_grad_norm_(dvae.parameters(), args["grad_clip_norm"])
 
             scaler.step(opt)
             scaler.update()
@@ -176,7 +176,7 @@ def train_dvae(args):
             global_step += 1
             progress_bar.set_postfix(step=f"{cur_step+1}/{len(train_data_loader)}", global_step=global_step, loss=total_loss.item(), recon_loss=recon_loss.item(), commit_loss=commitment_loss.item())
 
-            if args.use_wandb:
+            if args["use_wandb"]:
                 wandb.log({
                     'step': global_step,
                     'loss': total_loss.item(),
@@ -224,12 +224,12 @@ def train_dvae(args):
 
         # Save the best model checkpoint
         if avg_loss < best_metrics['loss']:
-            save_path = f'train/best_dvae_{args.language}.pth'
+            save_path = f'train/best_dvae_{args["language"]}.pth'
             torch.save(dvae, save_path)
             logger.info(f"Saved best model checkpoint at epoch {best_metrics['epoch']} with loss {best_metrics['loss']:.4f}")
 
         # Log metrics to wandb (if enabled)
-        if args.use_wandb:
+        if args["use_wandb"]:
             wandb.log({
                 'epoch': epoch+1,
                 'avg_loss': avg_loss,
@@ -238,8 +238,8 @@ def train_dvae(args):
             })
 
         # Save model checkpoint every few epochs
-        if (epoch + 1) % args.save_every == 0:
-            save_path = f'train/finetuned_dvae_{args.language}_epoch{epoch+1}.pth'
+        if (epoch + 1) % args["save_every"] == 0:
+            save_path = f'train/finetuned_dvae_{args["language"]}_epoch{epoch+1}.pth'
             torch.save(dvae, save_path)
             logger.info(f"Saved model checkpoint at epoch {epoch+1}")
 
@@ -254,19 +254,33 @@ def train_dvae(args):
 
 
 if __name__== "__main__":
-    parser = argparse.ArgumentParser(description='Train DVAE model on custom dataset')
-    parser.add_argument('--dvae_checkpoint', type=str, default='./base_model/dvae.pth', help='Path to pre-trained DVAE checkpoint')
-    parser.add_argument('--mel_norm_file', type=str, default='./base_model/mel_stats.pth', help='Path to mel normalization file')
-    parser.add_argument('--dataset_path', type=str, default='./processed_dataset', help='Path to custom dataset')
-    parser.add_argument('--language', type=str, required=True, help='Language of the custom dataset')
-    parser.add_argument('--epochs', type=int, default=20, help='Number of training epochs')
-    parser.add_argument('--batch_size', type=int, default=10, help='Batch size for training')
-    parser.add_argument('--learning_rate', type=float, default=5e-05, help='Learning rate for optimizer')
-    parser.add_argument('--num_workers', type=int, default=8, help='Number of workers for data loading')
-    parser.add_argument('--grad_clip_norm', type=float, default=0.5, help='Gradient clipping norm value')
-    parser.add_argument('--use_mixed_precision', action='store_true', help='Enable mixed precision training')
-    parser.add_argument('--use_wandb', action='store_true', help='Enable logging to Weights and Biases')
-    parser.add_argument('--save_every', type=int, default=10, help='Save model checkpoint every N epochs')
+    # parser = argparse.ArgumentParser(description='Train DVAE model on custom dataset')
+    # parser.add_argument('--dvae_checkpoint', type=str, default='./base_model/dvae.pth', help='Path to pre-trained DVAE checkpoint')
+    # parser.add_argument('--mel_norm_file', type=str, default='./base_model/mel_stats.pth', help='Path to mel normalization file')
+    # parser.add_argument('--dataset_path', type=str, default='./processed_dataset', help='Path to custom dataset')
+    # parser.add_argument('--language', type=str, required=True, help='Language of the custom dataset')
+    # parser.add_argument('--epochs', type=int, default=20, help='Number of training epochs')
+    # parser.add_argument('--batch_size', type=int, default=10, help='Batch size for training')
+    # parser.add_argument('--learning_rate', type=float, default=5e-05, help='Learning rate for optimizer')
+    # parser.add_argument('--num_workers', type=int, default=8, help='Number of workers for data loading')
+    # parser.add_argument('--grad_clip_norm', type=float, default=0.5, help='Gradient clipping norm value')
+    # parser.add_argument('--use_mixed_precision', action='store_true', help='Enable mixed precision training')
+    # parser.add_argument('--use_wandb', action='store_true', help='Enable logging to Weights and Biases')
+    # parser.add_argument('--save_every', type=int, default=10, help='Save model checkpoint every N epochs')
+    args = {
+        "dvae_checkpoint": "/home/xtts_v2_training/src/run/training/XTTS_v2.0_original_model_files/dvae.pth",
+        "mel_norm_file": "/home/xtts_v2_training/src/run/training/XTTS_v2.0_original_model_files/mel_stats.pth",
+        "dataset_path": '/home/datasets_dvae/ELEVEN/',
+        "language": "ru",
+        "epochs": 20,
+        "batch_size": 10,
+        "learning_rate": 5e-05,
+        "num_workers": 8,
+        "grad_clip_norm": 0.5,
+        "use_mixed_precision": "store_true",
+        "use_wandb": "store_true",
+        "save_every": 10,
+    }
 
-    args = parser.parse_args()
+    # args = parser.parse_args()
     train_dvae(args)
