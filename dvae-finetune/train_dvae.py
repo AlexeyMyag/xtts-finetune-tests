@@ -29,6 +29,22 @@ def setup_logging(log_file):
     )
     return logging.getLogger(__name__)
 
+
+def fixed_loss_fn(a, b, reduction="none"):
+    # a = img, b = out
+    if a.shape[-1] != b.shape[-1]:
+        min_len = min(a.shape[-1], b.shape[-1])
+        a = a[..., :min_len]
+        b = b[..., :min_len]
+
+        print("SHIIIT")
+
+    else:
+        print("ALL IS NOTM")
+
+    return DiscreteVAE.loss_fn.__wrapped__(None, a, b, reduction=reduction)
+
+
 def load_custom_dataset(dataset_path, language):
     metadata_train_file = os.path.join(dataset_path, f'metadata_train.txt')
     metadata_eval_file = os.path.join(dataset_path, f'metadata_eval.txt')
@@ -79,21 +95,6 @@ def train_dvae(args):
     )
     dvae.load_state_dict(torch.load(args["dvae_checkpoint"]), strict=False)
     # Патчим loss_fn, чтобы при несовпадении длины усекать до минимальной
-    orig_loss_fn = dvae.loss_fn
-
-    def fixed_loss_fn(a, b, reduction="none"):
-        # a = img, b = out
-        if a.shape[-1] != b.shape[-1]:
-            min_len = min(a.shape[-1], b.shape[-1])
-            a = a[..., :min_len]
-            b = b[..., :min_len]
-
-            print("SHIIIT")
-
-        else:
-            print("ALL IS NOTM")
-
-        return orig_loss_fn(a, b, reduction=reduction)
 
     dvae.loss_fn = fixed_loss_fn
     dvae.cuda()
