@@ -152,7 +152,7 @@ def train_dvae(args):
         epoch_recon_loss = 0
         epoch_commit_loss = 0
 
-        progress_bar = tqdm(train_data_loader, desc=f"Epoch {epoch+1}/{args["epochs"]}")
+        progress_bar = tqdm(train_data_loader, desc=f"Epoch {epoch+1}/{args['epochs']}")
         for cur_step, batch in enumerate(progress_bar):
             opt.zero_grad()
 
