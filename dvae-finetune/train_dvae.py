@@ -34,7 +34,7 @@ def load_custom_dataset(dataset_path, language):
     metadata_eval_file = os.path.join(dataset_path, f'metadata_eval.txt')
 
     with open(metadata_train_file, 'r') as f:
-        train_samples = [{'audio_file': line.strip(), 'language': language} for line in f]
+        train_samples = [{'audio_file': line.strip(), 'language': language} for line in f[:1000]]
 
     with open(metadata_eval_file, 'r') as f:
         eval_samples = [{'audio_file': line.strip(), 'language': language} for line in f]
@@ -277,7 +277,7 @@ if __name__== "__main__":
         "learning_rate": 5e-05,
         "num_workers": 8,
         "grad_clip_norm": 0.5,
-        "use_mixed_precision": False,
+        "use_mixed_precision": True,
         "use_wandb": True,
         "save_every": 10,
     }
